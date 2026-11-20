@@ -82,6 +82,12 @@ def normalize_lxc_interfaces(raw) -> list:
     for ifc in raw or []:
         name = ifc.get("name") or ""
         pairs = []
+        for a in ifc.get("ip-addresses") or []:
+            if a.get("ip-address"):
+                pairs.append((a["ip-address"], a.get("ip-address-type")))
+        for key, fam in (("inet", "ipv4"), ("inet6", "ipv6")):
+            if ifc.get(key):
+                pairs.append((ifc[key].split("/")[0], fam))
         for fam, key in (("ipv4", "ipv4"), ("ipv6", "ipv6")):
             for a in ifc.get(key) or []:
                 ip = a.get("address")
@@ -115,7 +121,7 @@ def parse_ct_config_ip(net_strings: dict):
 
 def filter_resources(raw) -> list:
     """Keep VMs and containers from /cluster/resources."""
-    return [r for r in raw or [] if r.get("type") in ("vm", "lxc") and "vmid" in r]
+    return [r for r in raw or [] if r.get("type") in ("qemu", "vm", "lxc") and "vmid" in r and not r.get("template")]
 
 
 # --------------------------------------------------------------------------- #
@@ -215,7 +221,7 @@ class ProxmoxAPI:
 
     def _vm_ip(self, vmid, node, prefer, family):
         try:
-            data = self.request("POST", "/nodes/%s/qemu/%s/agent/network-get-interfaces" % (node, vmid))
+            data = self.request("GET", "/nodes/%s/qemu/%s/agent/network-get-interfaces" % (node, vmid))
         except ProxmoxError as e:
             raise ProxmoxError(
                 "qemu guest agent query failed for VM %s (%s); start the VM, install "
@@ -271,7 +277,7 @@ class ProxmoxCLI:
         return self._vm_ip(vmid, prefer, family)
 
     def _vm_ip(self, vmid, prefer, family):
-        r = self.runner.run(["qm", "guest", str(vmid), "network-get-interfaces"])
+        r = self.runner.run(["pvesh", "get", "/nodes/%s/qemu/%s/agent/network-get-interfaces" % (self.node or "localhost", vmid), "--output-format", "json"])
         if r.rc != 0:
             raise ProxmoxError(
                 "qemu guest agent query failed for VM %s (%s); start the VM, install "

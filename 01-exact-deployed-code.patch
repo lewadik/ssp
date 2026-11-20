@@ -1,0 +1,89 @@
+diff --git a/ssipng/daemon.py b/ssipng/daemon.py
+index 95e312b..8a2dbbb 100755
+--- a/ssipng/daemon.py
++++ b/ssipng/daemon.py
+@@ -34,7 +34,7 @@ class Daemon:
+         first = True
+         while not self._stop.is_set():
+             try:
+-                self._tick(first or self.cfg.daemon.cleanup is False)
++                self._tick(True)
+             except Exception as e:  # noqa: BLE001 — keep the daemon alive
+                 self.log(f"daemon: sync failed: {e}")
+             first = False
+diff --git a/ssipng/proxmox.py b/ssipng/proxmox.py
+index 7eb0340..5686e82 100755
+--- a/ssipng/proxmox.py
++++ b/ssipng/proxmox.py
+@@ -82,6 +82,12 @@ def normalize_lxc_interfaces(raw) -> list:
+     for ifc in raw or []:
+         name = ifc.get("name") or ""
+         pairs = []
++        for a in ifc.get("ip-addresses") or []:
++            if a.get("ip-address"):
++                pairs.append((a["ip-address"], a.get("ip-address-type")))
++        for key, fam in (("inet", "ipv4"), ("inet6", "ipv6")):
++            if ifc.get(key):
++                pairs.append((ifc[key].split("/")[0], fam))
+         for fam, key in (("ipv4", "ipv4"), ("ipv6", "ipv6")):
+             for a in ifc.get(key) or []:
+                 ip = a.get("address")
+@@ -115,7 +121,7 @@ def parse_ct_config_ip(net_strings: dict):
+ 
+ def filter_resources(raw) -> list:
+     """Keep VMs and containers from /cluster/resources."""
+-    return [r for r in raw or [] if r.get("type") in ("vm", "lxc") and "vmid" in r]
++    return [r for r in raw or [] if r.get("type") in ("qemu", "vm", "lxc") and "vmid" in r and not r.get("template")]
+ 
+ 
+ # --------------------------------------------------------------------------- #
+@@ -215,7 +221,7 @@ class ProxmoxAPI:
+ 
+     def _vm_ip(self, vmid, node, prefer, family):
+         try:
+-            data = self.request("POST", "/nodes/%s/qemu/%s/agent/network-get-interfaces" % (node, vmid))
++            data = self.request("GET", "/nodes/%s/qemu/%s/agent/network-get-interfaces" % (node, vmid))
+         except ProxmoxError as e:
+             raise ProxmoxError(
+                 "qemu guest agent query failed for VM %s (%s); start the VM, install "
+@@ -271,7 +277,7 @@ class ProxmoxCLI:
+         return self._vm_ip(vmid, prefer, family)
+ 
+     def _vm_ip(self, vmid, prefer, family):
+-        r = self.runner.run(["qm", "guest", str(vmid), "network-get-interfaces"])
++        r = self.runner.run(["pvesh", "get", "/nodes/%s/qemu/%s/agent/network-get-interfaces" % (self.node or "localhost", vmid), "--output-format", "json"])
+         if r.rc != 0:
+             raise ProxmoxError(
+                 "qemu guest agent query failed for VM %s (%s); start the VM, install "
+diff --git a/ssipng/service.py b/ssipng/service.py
+index d39484b..1c23e2f 100755
+--- a/ssipng/service.py
++++ b/ssipng/service.py
+@@ -127,6 +127,7 @@ class Assigner:
+         path = self.backend.vhost_path(domain, vmid)
+         rec.vhost_path = str(path)
+         existed = path.exists()
++        old_content = path.read_text(encoding="utf-8") if existed else None
+ 
+         if dry_run:
+             actions.append(f"[dry-run] would write vhost {path}")
+@@ -146,8 +147,7 @@ class Assigner:
+                 actions.append(f"updated {extra_path}")
+ 
+         if changed or not existed:
+-            self._apply(rec, changed, actions, old_content=(path.read_text(encoding="utf-8")
+-                                                            if existed else None))
++            self._apply(rec, changed, actions, old_content=old_content)
+         self.state.set(vmid, rec.to_dict())
+         return rec, actions
+ 
+@@ -252,6 +252,9 @@ class Assigner:
+                 report.append({"vmid": vmid, "action": "skipped",
+                                "message": "no matching tag"})
+                 continue
++            if res.get("status") != "running":
++                report.append({"vmid": vmid, "action": "pending", "message": "guest not running"})
++                continue
+             entry = self.state.get(vmid)
+             if entry:
+                 if refresh_ip and not (self._target(vmid) and self._target(vmid).ip):

@@ -139,7 +139,7 @@ class TestProxmoxAPI(unittest.TestCase):
     def test_vm_agent_ip(self):
         def fake_urlopen(req, timeout=None, context=None):
             self.assertTrue(req.full_url.endswith("/nodes/pve1/qemu/101/agent/network-get-interfaces"))
-            self.assertEqual(req.get_method(), "POST")
+            self.assertEqual(req.get_method(), "GET")
             return FakeResp(json.dumps({"data": {"result": AGENT_IFACES}}).encode())
 
         api = ProxmoxAPI(url="https://pve:8006", token_id="a", token_secret="b",
@@ -159,7 +159,7 @@ class TestProxmoxCLI(unittest.TestCase):
         cli = ProxmoxCLI(runner=fake)
         ip = cli.guest_ip({"vmid": 101, "type": "vm"})
         self.assertEqual(ip, "10.0.0.5")
-        self.assertEqual(fake.last, ["qm", "guest", "101", "network-get-interfaces"])
+        self.assertEqual(fake.last, ["pvesh", "get", "/nodes/localhost/qemu/101/agent/network-get-interfaces", "--output-format", "json"])
 
     def test_lxc_static_config(self):
         class Fake(Runner):

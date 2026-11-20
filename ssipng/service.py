@@ -127,6 +127,7 @@ class Assigner:
         path = self.backend.vhost_path(domain, vmid)
         rec.vhost_path = str(path)
         existed = path.exists()
+        old_content = path.read_text(encoding="utf-8") if existed else None
 
         if dry_run:
             actions.append(f"[dry-run] would write vhost {path}")
@@ -146,8 +147,7 @@ class Assigner:
                 actions.append(f"updated {extra_path}")
 
         if changed or not existed:
-            self._apply(rec, changed, actions, old_content=(path.read_text(encoding="utf-8")
-                                                            if existed else None))
+            self._apply(rec, changed, actions, old_content=old_content)
         self.state.set(vmid, rec.to_dict())
         return rec, actions
 
@@ -251,6 +251,9 @@ class Assigner:
             if include and not _has_tag(res, include):
                 report.append({"vmid": vmid, "action": "skipped",
                                "message": "no matching tag"})
+                continue
+            if res.get("status") != "running":
+                report.append({"vmid": vmid, "action": "pending", "message": "guest not running"})
                 continue
             entry = self.state.get(vmid)
             if entry:

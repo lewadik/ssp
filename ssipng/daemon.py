@@ -34,7 +34,7 @@ class Daemon:
         first = True
         while not self._stop.is_set():
             try:
-                self._tick(first or self.cfg.daemon.cleanup is False)
+                self._tick(True)
             except Exception as e:  # noqa: BLE001 — keep the daemon alive
                 self.log(f"daemon: sync failed: {e}")
             first = False
