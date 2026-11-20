@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ssipng"
+version = "0.1.0"
+description = "Assign sslip.io domains to Proxmox VMs/CTs and wire them into the host web server"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "ssipng contributors" }]
+keywords = ["proxmox", "sslip.io", "nip.io", "nginx", "caddy", "apache", "reverse-proxy"]
+classifiers = [
+  "Environment :: Console",
+  "Intended Audience :: System Administrators",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: System :: Networking",
+]
+
+[project.scripts]
+ssipng = "ssipng.cli:main"
+
+[tool.setuptools]
+packages = ["ssipng", "ssipng.backends"]

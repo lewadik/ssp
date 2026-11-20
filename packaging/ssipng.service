@@ -1,0 +1,15 @@
+[Unit]
+Description=ssipng — sslip.io domain assigner for Proxmox VMs/CTs
+Documentation=https://sslip.io/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=SSIPNG_CONFIG=/etc/ssipng/config.toml
+ExecStart=/usr/local/bin/ssipng daemon
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

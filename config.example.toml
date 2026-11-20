@@ -1,0 +1,56 @@
+# ssipng configuration — place at /etc/ssipng/config.toml (or pass --config)
+
+[proxmox]
+mode = "api"                      # "api" (HTTPS, token or password) or "cli" (pvesh/qm/pct, run as root)
+url = "https://127.0.0.1:8006"
+user = "root@pam"
+token_id = "root@pam!ssipng"      # create with:  pveum user token add root@pam ssipng --privsep 0
+token_secret = "REPLACE-ME-UUID"
+# password = "…"                  # alternative to a token
+verify_ssl = false                # PVE ships a self-signed certificate by default
+# node = "pve1"                   # pin to one node (optional)
+
+[domain]
+mode = "proxy"                    # "proxy": hostname embeds the host's public IP, the host web server
+                                  #          reverse-proxies to the guest
+                                  # "direct": hostname embeds the guest IP itself (guest must be routable)
+public_ip = "203.0.113.5"         # public IPv4/IPv6 of this Proxmox host — required in proxy mode
+suffix = "sslip.io"               # sslip.io / nip.io
+template = "{name}-{vmid}.{public_ip_dashed}.{suffix}"
+name_max_len = 40
+include_label = true              # direct mode: prefix "name-vmid." before the guest IP labels
+
+[web]
+backend = "nginx"                 # nginx | apache | caddy (the web server already running on this host)
+port = 80                         # listen port of the generated HTTP vhost
+default_target_port = 80          # guest port to proxy to when nothing else is set
+# config_dir = "/etc/nginx/conf.d"          # override the vhost drop-in directory
+# apache_enabled_dir = "/etc/apache2/sites-enabled"
+# apache_mods_dir = "/etc/apache2/mods-enabled"
+caddyfile = "/etc/caddy/Caddyfile"
+caddy_import_dir = "/etc/caddy/conf.d"
+manage = true
+reload = true
+websocket = true                  # nginx: add Upgrade/Connection proxy headers
+acme_webroot = "/var/www/letsencrypt"
+
+[tls]
+mode = "none"                     # none | selfsigned | certbot | auto (auto = Caddy's built-in ACME)
+selfsigned_dir = "/etc/ssipng/tls"
+# certbot_email = "you@example.com"
+# certbot_staging = false         # true while testing (Let's Encrypt staging CA)
+
+[daemon]
+interval = 30                     # seconds between polls for new/changed guests
+cleanup = false                   # remove vhost + state entry when the guest disappears from the cluster
+include_tags = []                 # e.g. ["ssipng"] — only manage guests with at least one of these PVE tags
+exclude_vmids = []                # never touch these vmids, e.g. [101, 102]
+state_file = "/var/lib/ssipng/state.json"
+
+# Per-guest overrides (optional); key = vmid. Static IP here skips guest-agent discovery.
+[targets]
+# [targets.101]
+# ip = "10.10.10.10"
+# port = 8080
+# domain = "app.example.com"      # fully custom domain instead of the sslip.io template
+# tls = "selfsigned"
